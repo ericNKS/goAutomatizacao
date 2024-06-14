@@ -1,7 +1,10 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+)
 
 func main() {
-	fmt.Println("Hello Automatização")
+	ExecuteNodeJs("OneDrive\\Documentos\\golang")
+	fmt.Println("Nodes started with success")
 }
