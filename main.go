@@ -1,7 +1,8 @@
 package main
 
 func main() {
-	ExecuteNodeJs("OneDrive\\Documentos\\golang")
-	ExecuteNodeJs("OneDrive\\Documentos\\golangc")
-	select {}
+	// Function that execute node
+	// Param it's the directory where are your node project
+	ExecuteNodeJs("C:\\node\\expressApi")
+
 }
