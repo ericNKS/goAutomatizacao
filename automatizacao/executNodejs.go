@@ -1,4 +1,4 @@
-package main
+package automatizacao
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 
 func ExecuteNodeJs(nodeApplication string, nodePort string) bool {
 
-	if !isPortInUse(nodePort) {
+	if !IsServerOn(nodePort) {
 		cmd := exec.Command("cmd", "/c", "start", "cmd", "/k", "cd /d "+nodeApplication+" && node index")
 		// Inicia o comando
 		if err := cmd.Start(); err != nil {
@@ -20,7 +20,7 @@ func ExecuteNodeJs(nodeApplication string, nodePort string) bool {
 	return false
 }
 
-func isPortInUse(port string) bool {
+func IsServerOn(port string) bool {
 	conn, err := net.Dial("tcp", "localhost:"+port)
 	if err != nil {
 		return false
