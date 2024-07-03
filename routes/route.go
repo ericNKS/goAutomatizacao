@@ -1,10 +1,10 @@
 package routes
 
 import (
-	"automatizacao/automatizacao"
+	"automatizacao/handler"
+	"automatizacao/middleware"
 	"github.com/gin-gonic/gin"
 	"net/http"
-	"os"
 )
 
 func Route(app *gin.Engine) {
@@ -13,16 +13,12 @@ func Route(app *gin.Engine) {
 		if len(port) == 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid port"})
 		}
-		isServerOn := automatizacao.IsServerOn(port)
-		c.JSON(200, isServerOn)
-	})
-	app.GET("/server/run/:port", func(c *gin.Context) {
-		port := c.Param("port")
-		if len(port) == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid port"})
+		if handler.IsGabOn(port) {
+			c.JSON(http.StatusOK, gin.H{"message": "OK"})
 		}
-		applicationDir := os.Getenv("APPLICATION_DIR")
-		isServerOn := automatizacao.ExecuteNodeJs(applicationDir, port)
-		c.JSON(200, isServerOn)
+		c.JSON(http.StatusConflict, gin.H{"error": "Port in use or is not an gabinete"})
 	})
+
+	// Protected route
+	app.GET("/server/a/:dir/:port", middleware.Auth, handler.RunGab)
 }
