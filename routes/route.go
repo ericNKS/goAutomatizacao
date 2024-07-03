@@ -4,6 +4,7 @@ import (
 	"automatizacao/automatizacao"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"os"
 )
 
 func Route(app *gin.Engine) {
@@ -20,7 +21,7 @@ func Route(app *gin.Engine) {
 		if len(port) == 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid port"})
 		}
-		isServerOn := automatizacao.ExecuteNodeJs(port)
+		isServerOn := automatizacao.ExecuteNodeJs(os.Getenv("APLICATION_DIR"), port)
 		c.JSON(200, isServerOn)
 	})
 }
