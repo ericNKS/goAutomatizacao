@@ -21,7 +21,8 @@ func Route(app *gin.Engine) {
 		if len(port) == 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid port"})
 		}
-		isServerOn := automatizacao.ExecuteNodeJs(os.Getenv("APLICATION_DIR"), port)
+		applicationDir := os.Getenv("APPLICATION_DIR")
+		isServerOn := automatizacao.ExecuteNodeJs(applicationDir, port)
 		c.JSON(200, isServerOn)
 	})
 }
