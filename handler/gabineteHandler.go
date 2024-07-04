@@ -1,66 +1,106 @@
 package handler
 
 import (
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
+	"time"
 )
 
 type Gabinete struct {
-	name string
 	dir  string
 	port string
 }
 
 var gabinetes = []Gabinete{
-	{"Teste 1", "golang", "8000"},
-	{"Teste 2", "golangc", "8001"},
+	{"golang", "8000"},
+	{"golangc", "8001"},
 }
 
-func NewGab(name string, dir string, port string) *Gabinete {
-	gab := Gabinete{name: name, dir: dir, port: port}
-	gabinetes = append(gabinetes, gab)
-	return &gab
+// Function to load .env
+var err = godotenv.Load(".env")
+
+func VerifyAndRun() {
+	for true {
+		for i := range gabinetes {
+			if !IsGabOn(gabinetes[i].port) {
+				initServer(gabinetes[i].dir)
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}
 }
 
+func initServer(dir string) bool {
+	if err != nil {
+		return false
+	}
+	nodeApplication := os.Getenv("APPLICATION_DIR") + "\\" + dir
+	cmd := exec.Command("cmd", "/c", "start", "cmd", "/c", "cd /d "+nodeApplication+" && node index")
+	// Inicia o comando
+	if err := cmd.Start(); err != nil {
+		return false
+	} else {
+		return true
+	}
+}
+func createDir(dir string) bool {
+	dir = os.Getenv("APPLICATION_DIR") + "\\" + dir
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		fmt.Println(dir, "does not exist")
+		if os.Mkdir(dir, 0755) != nil {
+			return false
+		}
+		return true
+	} else {
+		fmt.Println("The provided directory named", dir, "exists")
+		return false
+	}
+}
 func RunGab(c *gin.Context) {
 	dir := c.Param("dir")
 	port := c.Param("port")
 
-	// Function to load .env
-	err := godotenv.Load(".env")
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
-	}
 	gab := isGab(port)
-	if gab.port != "" && gab.dir == dir {
-		nodeApplication := os.Getenv("APPLICATION_DIR") + "\\" + gab.dir
-		if !IsGabOn(port) {
-			cmd := exec.Command("cmd", "/c", "start", "cmd", "/k", "cd /d "+nodeApplication+" && node index")
-			// Inicia o comando
-			if err := cmd.Start(); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Error starting command"})
+	if gab.port != port && gab.dir != dir {
+		if createDir(dir) {
+			gab.port = port
+			gab.dir = dir
+			gabinetes = append(gabinetes, *gab)
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "gabinete or port invalid"})
+			c.Abort()
+		}
+
+	} else if (gab.port != port && gab.dir == dir) || (gab.port == port && gab.dir != dir) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "gabinete or port invalid"})
+		c.Abort()
+	}
+	if gab.dir == dir && gab.port == port {
+		if !IsGabOn(gab.port) {
+			// Inicia o servidor
+			if initServer(gab.dir) {
+				c.JSON(http.StatusOK, gin.H{"success": "Server is running"})
 			} else {
-				c.JSON(http.StatusOK, true)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Error starting command"})
 			}
 		} else {
 			c.JSON(http.StatusConflict, gin.H{"error": "Server already running"})
 		}
-	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "gabinete or port invalid"})
 	}
 }
 
-func isGab(port string) Gabinete {
+func isGab(port string) *Gabinete {
 	for i := range gabinetes {
 		if gabinetes[i].port == port {
-			return gabinetes[i]
+			return &gabinetes[i]
 		}
 	}
-	return Gabinete{}
+	return &Gabinete{}
 }
 func IsGabOn(port string) bool {
 	conn, err := net.Dial("tcp", "localhost:"+port)
