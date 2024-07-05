@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -26,13 +29,36 @@ var err = godotenv.Load(".env")
 
 func VerifyAndRun() {
 	for true {
+		if !mongoIsRunning() {
+			startMongo()
+		}
 		for i := range gabinetes {
 			if !IsGabOn(gabinetes[i].port) {
 				initServer(gabinetes[i].dir)
 			}
 			time.Sleep(1 * time.Second)
 		}
+		time.Sleep(10 * time.Second)
 	}
+}
+func startMongo() {
+	cmd := exec.Command("sc", "start", "mongodb")
+	status := cmd.Run()
+	if status != nil {
+		log.Println("Error in starting mongoDB")
+		return
+	}
+	log.Println("mongoDB is running")
+	return
+}
+func mongoIsRunning() bool {
+	cmd := exec.Command("sc", "query", "mongodb")
+	// Inicia o comando
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(out), "RUNNING")
 }
 
 func initServer(dir string) bool {
@@ -48,13 +74,48 @@ func initServer(dir string) bool {
 		return true
 	}
 }
-func createDir(dir string) bool {
-	dir = os.Getenv("APPLICATION_DIR") + "\\" + dir
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
+func createDir(dir string, port string) bool {
+	fullDir := os.Getenv("APPLICATION_DIR") + "\\" + dir
+	if _, err := os.Stat(fullDir); os.IsNotExist(err) {
 		fmt.Println(dir, "does not exist")
-		if os.Mkdir(dir, 0755) != nil {
+		if os.Mkdir(fullDir, 0755) != nil {
 			return false
 		}
+
+		// Creating index.js
+		f, err := os.Create(filepath.Join(fullDir, "index.js"))
+
+		if err != nil {
+			fmt.Println(err)
+			return false
+		}
+		scriptToIndexJs := `
+			// define a porta padrao
+			const PORT = ` + port + `;
+			const PORTA = "` + port + `";
+			const NOME = "debora";
+			const gabineteID = ` + strings.Replace(port[1:], "0", "", -1) + `;
+			const banco = "` + dir + `";			
+			
+			/* FUNCAO IMPORTADA */
+			const pltFunctions = require("../functions");
+			console.log( 'PORT', PORT )
+			const classPltFunctions = new pltFunctions( PORT, PORTA, NOME, gabineteID, banco );
+			console.log( classPltFunctions )
+		`
+
+		_, err = f.WriteString(scriptToIndexJs)
+		if err != nil {
+			f.Close()
+			return false
+
+		}
+		err = f.Close()
+		if err != nil {
+			fmt.Println(err)
+			return false
+		}
+		// Return that the directory and file was created
 		return true
 	} else {
 		fmt.Println("The provided directory named", dir, "exists")
@@ -67,7 +128,7 @@ func RunGab(c *gin.Context) {
 
 	gab := isGab(port)
 	if gab.port != port && gab.dir != dir {
-		if createDir(dir) {
+		if createDir(dir, port) {
 			gab.port = port
 			gab.dir = dir
 			gabinetes = append(gabinetes, *gab)
