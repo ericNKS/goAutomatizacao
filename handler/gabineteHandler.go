@@ -2,8 +2,6 @@ package handler
 
 import (
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 	"log"
 	"net"
 	"net/http"
@@ -12,16 +10,19 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 type Gabinete struct {
+	name string
 	dir  string
 	port string
 }
 
 var gabinetes = []Gabinete{
-	{"golang", "8000"},
-	{"golangc", "8001"},
+	{"Teste", "project", "8000"},
 }
 
 // Function to load .env
@@ -49,13 +50,13 @@ func startMongo() {
 		return
 	}
 	log.Println("mongoDB is running")
-	return
 }
 func mongoIsRunning() bool {
 	cmd := exec.Command("sc", "query", "mongodb")
 	// Inicia o comando
 	out, err := cmd.CombinedOutput()
 	if err != nil {
+		log.Println(err)
 		return false
 	}
 	return strings.Contains(string(out), "RUNNING")
@@ -66,7 +67,7 @@ func initServer(dir string) bool {
 		return false
 	}
 	nodeApplication := os.Getenv("APPLICATION_DIR") + "\\" + dir
-	cmd := exec.Command("cmd", "/c", "start", "cmd", "/c", "cd /d "+nodeApplication+" && node index")
+	cmd := exec.Command("cmd", "/c", "start", "cmd", "/c", "cd /d "+nodeApplication+" && node index && exit")
 	// Inicia o comando
 	if err := cmd.Start(); err != nil {
 		return false
@@ -74,37 +75,22 @@ func initServer(dir string) bool {
 		return true
 	}
 }
-func createDir(dir string, port string) bool {
-	fullDir := os.Getenv("APPLICATION_DIR") + "\\" + dir
+func createFile(nameFile string, fullDir string, context string) bool {
 	if _, err := os.Stat(fullDir); os.IsNotExist(err) {
-		fmt.Println(dir, "does not exist")
 		if os.Mkdir(fullDir, 0755) != nil {
 			return false
 		}
 
 		// Creating index.js
-		f, err := os.Create(filepath.Join(fullDir, "index.js"))
+		f, err := os.Create(filepath.Join(fullDir, nameFile))
 
 		if err != nil {
 			fmt.Println(err)
 			return false
 		}
-		scriptToIndexJs := `
-			// define a porta padrao
-			const PORT = ` + port + `;
-			const PORTA = "` + port + `";
-			const NOME = "debora";
-			const gabineteID = ` + strings.Replace(port[1:], "0", "", -1) + `;
-			const banco = "` + dir + `";			
-			
-			/* FUNCAO IMPORTADA */
-			const pltFunctions = require("../functions");
-			console.log( 'PORT', PORT )
-			const classPltFunctions = new pltFunctions( PORT, PORTA, NOME, gabineteID, banco );
-			console.log( classPltFunctions )
-		`
+		// Continue
 
-		_, err = f.WriteString(scriptToIndexJs)
+		_, err = f.WriteString(context)
 		if err != nil {
 			f.Close()
 			return false
@@ -118,17 +104,33 @@ func createDir(dir string, port string) bool {
 		// Return that the directory and file was created
 		return true
 	} else {
-		fmt.Println("The provided directory named", dir, "exists")
+		fmt.Println("The provided directory in ", fullDir, "exists")
 		return false
 	}
 }
 func RunGab(c *gin.Context) {
 	dir := c.Param("dir")
+	name := c.Param("name")
 	port := c.Param("port")
 
 	gab := isGab(port)
 	if gab.port != port && gab.dir != dir {
-		if createDir(dir, port) {
+		fullDir := os.Getenv("APPLICATION_DIR") + "\\" + dir
+		scriptToIndexJs := `
+			// define a porta padrao
+			const PORT = ` + port + `;
+			const PORTA = "` + port + `";
+			const NOME = "` + name + `";
+			const gabineteID = ` + strings.Replace(port[1:], "0", "", -1) + `;
+			const banco = "` + dir + `";			
+			
+			/* FUNCAO IMPORTADA */
+			const pltFunctions = require("../functions");
+			console.log( 'PORT', PORT )
+			const classPltFunctions = new pltFunctions( PORT, PORTA, NOME, gabineteID, banco );
+			console.log( classPltFunctions )
+		`
+		if createFile("index.js", fullDir, scriptToIndexJs) {
 			gab.port = port
 			gab.dir = dir
 			gabinetes = append(gabinetes, *gab)

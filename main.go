@@ -3,6 +3,7 @@ package main
 import (
 	"automatizacao/handler"
 	"automatizacao/routes"
+
 	"github.com/gin-gonic/gin"
 )
 
