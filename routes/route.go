@@ -2,6 +2,7 @@ package routes
 
 import (
 	"automatizacao/handler"
+	"automatizacao/middleware"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -25,5 +26,7 @@ func Route(app *gin.Engine) {
 
 	// Protected route
 	// Route to open prompt
-	//app.GET("/server/a/:dir/:port", middleware.Auth, handler.RunGab)
+	app.GET("/server/a/:dir/:port", middleware.Auth, handler.RunGab)
+
+	//app.GET("/server/a/:id", middleware.Auth, handler.RunGab)
 }

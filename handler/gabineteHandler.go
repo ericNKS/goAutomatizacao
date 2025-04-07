@@ -2,9 +2,15 @@ package handler
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
+
+	//"bytes"
+	"encoding/json"
+	"strconv"
+
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,8 +27,18 @@ type Gabinete struct {
 	port string
 }
 
+type Site struct {
+	ID      int    `json:"id"`
+	SitNome string `json:"sitNome"`
+	SitDns  string `json:"sitDns"`
+}
+
+type Response struct {
+	Data []Site `json:"data"`
+}
+
 var gabinetes = []Gabinete{
-	{"Teste", "project", "8000"},
+	//{"Teste", "plt-0025", "4025"},
 }
 
 // Function to load .env
@@ -33,13 +49,61 @@ func VerifyAndRun() {
 		if !mongoIsRunning() {
 			startMongo()
 		}
+
+		// obter os paineis
+		url := "https://pltmax.com/s/get-painel"
+
+		resp, err := http.Get(url + "?auth=p0l1t1M@X")
+		if err != nil {
+			fmt.Println("Erro ao fazer a solicitação GET:", err)
+		}
+
+		defer resp.Body.Close()
+
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			fmt.Println("Erro ao ler o corpo da resposta:", err)
+		}
+
+		var responseData Response
+		err = json.Unmarshal(body, &responseData)
+		if err != nil {
+			fmt.Println("Erro ao desserializar JSON:", err)
+
+		}
+
+		paineis := responseData.Data
+
+		/**/
+		for i := range paineis {
+
+			dirPainel := paineis[i].SitDns
+			if dirPainel == "" {
+				fmt.Println("!vazio!")
+				dirPainel = strconv.Itoa(paineis[i].ID)
+			}
+
+			dirPainel = "plt-" + dirPainel
+			var portPainel = fmt.Sprintf("%02d", paineis[i].ID)
+			portPainel = "40" + portPainel
+
+			newSite := Gabinete{name: paineis[i].SitNome, dir: dirPainel, port: portPainel}
+
+			gabinetes = append(gabinetes, newSite)
+
+		}
+
+		/**/
 		for i := range gabinetes {
 			if !IsGabOn(gabinetes[i].port) {
-				initServer(gabinetes[i].dir)
+				fmt.Println("isGabOn", gabinetes[i], IsGabOn(gabinetes[i].port))
+				AddDirGab(gabinetes[i])
+				//initServer(gabinetes[i].dir)
+				time.Sleep(50 * time.Second)
 			}
-			time.Sleep(1 * time.Second)
 		}
-		time.Sleep(10 * time.Second)
+
+		time.Sleep(60 * time.Second)
 	}
 }
 func startMongo() {
@@ -157,6 +221,65 @@ func RunGab(c *gin.Context) {
 	}
 }
 
+func AddDirGab(gab Gabinete) {
+
+	//fmt.Println( "AddDirGab > ", gab )
+
+	var dir = gab.dir
+	var name = gab.name
+	var port = gab.port
+
+	//gab := isGab(port)
+
+	fullDir := os.Getenv("APPLICATION_DIR") + "\\" + dir
+	fmt.Println("fullDir: ", fullDir)
+
+	if _, err := os.Stat(fullDir); os.IsNotExist(err) {
+		fmt.Println("DIR existe! ")
+		scriptToIndexJs := `
+			// define a porta padrao
+			const PORT = ` + port + `;
+			const PORTA = "` + port + `";
+			const NOME = "` + name + `";
+			const gabineteID = ` + strings.Replace(port[1:], "0", "", -1) + `;
+			const banco = "` + dir + `";			
+			
+			/* FUNCAO IMPORTADA */
+			const pltFunctions = require("../functions");
+			console.log( 'PORT', PORT )
+			const classPltFunctions = new pltFunctions( PORT, PORTA, NOME, gabineteID, banco );
+			console.log( classPltFunctions )
+		`
+		if createFile("index.js", fullDir, scriptToIndexJs) {
+			gab.port = port
+			gab.dir = dir
+			//gabinetes = append(gabinetes, *gab)
+		} else {
+			//c.JSON(http.StatusBadRequest, gin.H{"error": "gabinete or port invalid"})
+			//c.Abort()
+		}
+
+	} else {
+		fmt.Println("Não existe DIR!! ")
+		//c.JSON(http.StatusBadRequest, gin.H{"error": "gabinete or port invalid"})
+		//c.Abort()
+	}
+	if gab.dir == dir && gab.port == port {
+		if !IsGabOn(gab.port) {
+			// Inicia o servidor
+			if initServer(gab.dir) {
+				//c.JSON(http.StatusOK, gin.H{"success": "Server is running"})
+				fmt.Println("Server is running")
+			} else {
+				//c.JSON(http.StatusInternalServerError, gin.H{"error": "Error starting command"})
+			}
+		} else {
+			//c.JSON(http.StatusConflict, gin.H{"error": "Server already running"})
+			fmt.Println("Server already running")
+		}
+	}
+}
+
 func isGab(port string) *Gabinete {
 	for i := range gabinetes {
 		if gabinetes[i].port == port {
@@ -167,10 +290,13 @@ func isGab(port string) *Gabinete {
 }
 func IsGabOn(port string) bool {
 	conn, err := net.Dial("tcp", "localhost:"+port)
+
+	//fmt.Println("teste", port)
 	if err != nil {
 		return false
 	}
 	if isGab(port).port == "" {
+
 		return false
 	}
 	conn.Close()
